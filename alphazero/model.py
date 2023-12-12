@@ -11,8 +11,12 @@ class AlphaZeroModel(tf.keras.Model):
     
     The final output of residual blocks passes into two seperate heads.
     
+    All the `Conv2D` and `Dense` that compose `AlphaZeroModel` 
+    have L2 regularizer. The final loss of the model is its 
+    `compiled loss + L2 regularization loss`. 
+    
     Args:
-        n_res (int): Number of residual blocks to be made. 
+        n_res (int, optional): Number of residual blocks to be made. 
             Setted to 39 by default.
         n_filter (int, optional): Number of filters in convolutional layers.
             Setted to 256 by default.
@@ -35,15 +39,28 @@ class AlphaZeroModel(tf.keras.Model):
                  p_head_out_dim: int=361, v_head_out_dim: int=1, **kwargs):
         super(AlphaZeroModel, self).__init__()
         
-        self._conv_block(n_filter, (3, 3), False, 
-                         input_shape=kwargs['input_shape'])
+        if 'input_shape' in kwargs:
+            self._conv_block = ConvBlock(n_filter, (3, 3), False, 
+                                         input_shape=kwargs['input_shape'])
+        else:
+            self._conv_block = ConvBlock(n_filter, (3, 3), False)
+            
         self._res_blocks = [ResBlock(n_filter) for _ in range(n_res)]
         self._p_head = PolicyHead(p_head_out_dim)
         self._v_head = ValueHead(v_head_out_dim)
 
 
-    def call(self, inputs, training: bool) -> tf.Tensor:
-        pass
+    def call(self, inputs, training: bool) -> tuple:
+        conv_block_out = self._conv_block(inputs, training)
+        res_block_out = self._res_blocks[0](conv_block_out, training)
+        
+        for i in range(1, len(self._res_blocks)):
+            res_block_out = self._res_blocks[i](res_block_out)
+        
+        p = self._p_head(res_block_out, training)
+        v = self._v_head(res_block_out, training)
+        
+        return (p, v)
         
    
 class ConvBlock(tf.keras.layers.Layer):
@@ -84,13 +101,16 @@ class ConvBlock(tf.keras.layers.Layer):
        
         if 'input_shape' in kwargs:
             self._conv2d = tf.keras.layers.Conv2D(n_filter, kernel_size, 
-                    padding='same', data_format='channels_first', 
+                    padding='same', data_format='channels_first',
+                    kernel_regularizer='l2', bias_regularizer='l2', 
                     input_shape=kwargs['input_shape'])
         else:
             self._conv2d = tf.keras.layers.Conv2D(n_filter, kernel_size, 
-                    padding='same', data_format='channels_first')
+                    padding='same', data_format='channels_first',
+                    kernel_regularizer='l2', bias_regularizer='l2')
                     
-        self._bn = tf.keras.layers.BatchNormalization(axis=1)
+        self._bn = tf.keras.layers.BatchNormalization(axis=1, 
+                beta_regularizer='l2', gamma_regularizer='l2')
         self._residual = residual
 
 
@@ -157,7 +177,9 @@ class PolicyHead(tf.keras.layers.Layer):
         super(PolicyHead, self).__init__()
         
         self._conv_block = ConvBlock(2, (1, 1), False)    
-        self._fc = tf.keras.layers.Dense(out_dim, activation='softmax')
+        self._fc = tf.keras.layers.Dense(out_dim, activation='softmax', 
+                                         kernel_regularizer='l2', 
+                                         bias_regularizer='l2')
 
 
     def call(self, inputs, training: bool) -> tf.Tensor:
@@ -177,7 +199,7 @@ class ValueHead(tf.keras.layers.Layer):
     * A fully connected linear layer to a hidden layer of size 256
     * A recitifier nonlinearity
     * A fully connected linear layer to vector
-    * A tanh nonlinearity outputting a scalar in the range [-1, 1]
+    * A tanh nonlinearity outputting vector in the range [-1, 1]
     
     Args:
         out_dim(int): Dimension of ouput vector
@@ -192,8 +214,12 @@ class ValueHead(tf.keras.layers.Layer):
         super(ValueHead, self).__init__()
         
         self._conv_block = ConvBlock(1, (1, 1), False)
-        self._fc1 = tf.keras.layers.Dense(256, activation='relu')
-        self._fc2 = tf.keras.layers.Dense(out_dim, activation='tanh')
+        self._fc1 = tf.keras.layers.Dense(256, activation='relu', 
+                                          kernel_regularizer='l2', 
+                                          bias_regularizer='l2')
+        self._fc2 = tf.keras.layers.Dense(out_dim, activation='tanh',
+                                          kernel_regularizer='l2',
+                                          bias_regularizer='l2')
         
     
     def call(self, inputs, training: bool) -> tf.Tensor:
@@ -206,9 +232,20 @@ class ValueHead(tf.keras.layers.Layer):
 
 
 class AlphaZeroLoss(tf.keras.losses.Loss):
-    def __init__(self, reduction: tf.keras.losses.Reduction, name: str):
-        pass
+    """Loss of alphazero model.
     
+    The equation of loss function is \\
+    `l = pow(z - v, 2) - transpose(pi) * log(p)`
     
-    def call(self, y_true, y_pred):
-        pass
+    L2 regularization is applied since all the layers of `AlphaZeroModel` 
+    have L2 regularizer.
+    """
+    
+    def call(self, y_true: tuple, y_pred: tuple) -> tf.Tensor:
+        se = (y_true[1] - y_pred[1]) ** 2
+        cee = tf.reshape(
+                tf.keras.losses.categorical_crossentropy(y_true[0], y_pred[0]), 
+                [y_true[0].shape[0], 1])
+    
+        return se - cee
+    
