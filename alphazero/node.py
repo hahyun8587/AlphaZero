@@ -159,7 +159,7 @@ class Node():
         
         if self._children[a] == None:
             s_exp = self._simulator.simulate(self._s, a)
-            pv_exp = self._model(s_exp)
+            pv_exp = self._model(s_exp, False)
             v_exp = pv_exp[self._n_a]
             self._children[a] = Node(s_exp, v_exp, pv_exp[:self._n_a])
         else: 
