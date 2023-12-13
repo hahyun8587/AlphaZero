@@ -43,14 +43,14 @@ class Simulator():
                                   + ' did not implement method simulate()')
         
         
-    def is_terminal(self, s: np.ndarray) -> int:
-        """Checks whether given state `s` is terminal state or not.
+    def is_terminal(self, s: np.ndarray, a: int) -> bool:
+        """Checks whether state `s` derived by action `a` is terminal or not.
 
         Args:
             s (np.ndarray): The state to be checked.
-
+            a (int): Action that derived `s`
         Returns:
-            int: non-zero if the given state is terminal state, zero otherwise. 
+            bool: `True` if the given state is terminal, `False` otherwise. 
         """
         
         raise NotImplementedError('class ' + self.__class__.__name__ 
