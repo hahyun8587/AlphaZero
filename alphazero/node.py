@@ -36,9 +36,10 @@ class Node():
     _w_s: np.ndarray
     _n_s: np.ndarray
     _children: np.ndarray
-    _is_terminal: bool
+    _is_terminal: int
    
-    def __init__(self, s: np.ndarray, v_s: float, p_s: np.ndarray):
+    def __init__(self, s: np.ndarray, v_s: float, p_s: np.ndarray, 
+                 is_terminal: bool):
         self._s = s
         self._v_s = v_s
         self._p_s = p_s
@@ -46,7 +47,7 @@ class Node():
         self._w_s = np.zeros(self._n_a, dtype=float)
         self._n_s = np.zeros(self._n_a, dtype=int)
         self._children = np.full(self._n_a, fill_value=None, dtype=Node)
-        self._is_terminal = self._simulator.is_terminal(s)
+        self._is_terminal = is_terminal
  
  
     @classmethod
@@ -153,15 +154,17 @@ class Node():
         """
         
         if self._is_terminal:
-            return self.v_s
+            return self._v_s
         
         a = self._select()
         
         if self._children[a] == None:
             s_exp = self._simulator.simulate(self._s, a)
-            pv_exp = self._model(s_exp, False)
-            v_exp = pv_exp[self._n_a]
-            self._children[a] = Node(s_exp, v_exp, pv_exp[:self._n_a])
+            p_exp, v_exp = self._model(s_exp, False)
+            p_exp = p_exp.numpy().reshape(-1)
+            v_exp = v_exp.numpy().astype(int).reshape(-1)
+            self._children[a] = Node(s_exp, v_exp, p_exp,
+                                     self._simulator.is_terminal(s_exp, a))
         else: 
             v_exp = self._children[a]._expand_and_backup()        
         
@@ -191,7 +194,11 @@ class Node():
 
         return n_pow / n_pow.sum(axis=0)
                 
-                
+         
+    def get_s(self) -> np.ndarray:
+        return self._s     
+           
+           
     def get_child(self, i: int) -> 'Node': 
         """Gets `i + 1`th child of this instance. 
 
@@ -203,3 +210,8 @@ class Node():
         """     
         
         return self._children[i]
+
+
+    def get_is_terminal(self) -> int:
+        return self._is_terminal
+    
