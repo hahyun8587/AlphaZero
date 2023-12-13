@@ -7,7 +7,8 @@ class Simulator():
     `gen_init_s()`, `simulate()`, and `is_terminal()`.
     """
 
-    def gen_init_s(self) -> np.ndarray:
+    @classmethod
+    def gen_init_s(cls) -> np.ndarray:
         """Generates initial state. 
 
         Raises: 
@@ -18,7 +19,7 @@ class Simulator():
             np.ndarray: The initial state.
         """
 
-        raise NotImplementedError('class ' + self.__class__.__name__ 
+        raise NotImplementedError('class ' + cls.__name__ 
                                   + ' did not implement method gen_init_s()')
       
         
