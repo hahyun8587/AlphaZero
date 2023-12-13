@@ -57,7 +57,7 @@ class Agent():
             z = None
             
             root_s = self._simulator.gen_init_s()
-            root_s = root_s.astype(np.float64)
+            root_s = root_s[np.newaxis, :].astype(np.float64)
             root_p, root_v = self._model(root_s, False)
             root_p = root_p.numpy().reshape(-1)
             root_v = root_v.numpy().astype(int).reshape(-1)
