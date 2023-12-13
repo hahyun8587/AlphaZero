@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+
 from .environment import Environment
 from .node import Node
 from .replaymemory import ReplayMemory
@@ -16,11 +17,13 @@ class Agent():
     
     #instance variables
     _model: tf.keras.Model
+    _simulator: Simulator
     _n_a: int
     
     def __init__(self, model: tf.keras.Model, simulator: Simulator, 
                  n_a: int, type: int):
         self._model = model
+        self._simulator = simulator
         self._n_a = n_a
         
         Node.configure(model, simulator, n_a, 1)
@@ -53,8 +56,9 @@ class Agent():
             ep_mem = []
             z = None
             
-            root_s = Simulator.gen_init_s()
-            root_p, root_v = self._model(root_s[np.newaxis, :], False)
+            root_s = self._simulator.gen_init_s()
+            root_s = root_s[np.newaxis, :].astype(np.float64)
+            root_p, root_v = self._model(root_s, False)
             root_p = root_p.numpy().reshape(-1)
             root_v = root_v.numpy().astype(int).reshape(-1)
             root = Node(root_s, root_v, root_p, False) 
