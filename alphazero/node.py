@@ -162,8 +162,10 @@ class Node():
             s_exp = self._simulator.simulate(self._s, a)
             
             if s_exp is None:
+                s_exp = self._s.copy()
+                s_exp[1].fill(-self._s[1][0][0])
                 v_exp = 1.0
-                self._children[a] = Node(None, v_exp, None, True)
+                self._children[a] = Node(s_exp, v_exp, None, True)
             elif self._simulator.is_terminal(s_exp, a):
                 v_exp = -1.0
                 self._children[a] = Node(s_exp, v_exp, None, True)
