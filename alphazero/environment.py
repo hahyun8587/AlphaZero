@@ -7,7 +7,7 @@ class Environment():
     `gen_init_s()`, `response()`, and `is_terminal()`.
     """
     
-    def get_init_s(self, *args, **kwargs):
+    def gen_init_s(self, *args, **kwargs):
         """Generates initial state. 
 
         NotImplementedError: Raises when class that implemented 
