@@ -50,7 +50,7 @@ class AlphaZeroModel(tf.keras.Model):
         self._v_head = ValueHead(v_head_out_dim)
 
 
-    def call(self, inputs, training: bool) -> tuple:
+    def call(self, inputs, training: bool) -> list:
         conv_block_out = self._conv_block(inputs, training)
         res_block_out = self._res_blocks[0](conv_block_out, training)
         
@@ -60,7 +60,7 @@ class AlphaZeroModel(tf.keras.Model):
         p = self._p_head(res_block_out, training)
         v = self._v_head(res_block_out, training)
         
-        return (p, v)
+        return [p, v]
         
    
 class ConvBlock(tf.keras.layers.Layer):
@@ -241,7 +241,7 @@ class AlphaZeroLoss(tf.keras.losses.Loss):
     have L2 regularizer.
     """
     
-    def call(self, y_true: tuple, y_pred: tuple) -> tf.Tensor:
+    def call(self, y_true: list, y_pred: list) -> tf.Tensor:
         se = (y_true[1] - y_pred[1]) ** 2
         cee = tf.reshape(
                 tf.keras.losses.categorical_crossentropy(y_true[0], y_pred[0]), 
