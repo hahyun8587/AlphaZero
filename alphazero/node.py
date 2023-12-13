@@ -160,7 +160,8 @@ class Node():
         
         if self._children[a] == None:
             s_exp = self._simulator.simulate(self._s, a)
-            p_exp, v_exp = self._model(s_exp, False)
+            p_exp, v_exp = self._model(s_exp[np.newaxis, :].astype(np.float64), 
+                                       False)
             p_exp = p_exp.numpy().reshape(-1)
             v_exp = v_exp.numpy().astype(int).reshape(-1)
             self._children[a] = Node(s_exp, v_exp, p_exp,
