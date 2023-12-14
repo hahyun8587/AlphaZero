@@ -70,7 +70,7 @@ class ReplayMemory(deque):
         for i in sampled_idx:
             x.append(self[i][1])
             y_pi.append(self[i][2])
-            y_z.append(self[i][3])
+            y_z.append([self[i][3]])
             
         return (tf.constant(x, dtype=tf.float64), 
                 [tf.constant(y_pi), tf.constant(y_z, dtype=tf.float64)])         
