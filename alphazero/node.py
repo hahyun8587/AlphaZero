@@ -170,10 +170,10 @@ class Node():
                 v_exp = -1.0
                 self._children[a] = Node(s_exp, v_exp, None, True)
             else:     
-                p_exp, v_exp = self._model(s_exp[np.newaxis, :].astype(np.float64), 
-                                           False)
-                p_exp = p_exp.numpy().reshape(-1)
-                v_exp = v_exp.numpy().astype(int).reshape(-1)
+                #p_exp, v_exp = self._model(s_exp[np.newaxis, :].astype(np.float64), 
+                #                           False)
+                #p_exp = p_exp.numpy().reshape(-1)
+                #v_exp = v_exp.numpy().astype(int).reshape(-1)
                 #self._children[a] = Node(s_exp, v_exp, p_exp, False)
                 self._children[a] = Node(s_exp, 0.5, np.zeros((64980, )), False)
                 
