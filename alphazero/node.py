@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from math import sqrt
-from .simulator import Simulator
+from simulator import Simulator
 
 class Node():
     """Node of mcts tree.
@@ -25,7 +25,6 @@ class Node():
     #class variables
     _model: tf.keras.Model
     _simulator: Simulator
-    _n_a: int
     _type: int 
     
     #instance variables
@@ -36,55 +35,52 @@ class Node():
     _w_s: np.ndarray
     _n_s: np.ndarray
     _children: np.ndarray
-    _is_terminal: int
+    _is_terminal: bool
    
     def __init__(self, s: np.ndarray, v_s: float, p_s: np.ndarray, 
                  is_terminal: bool):
         self._s = s
         self._v_s = v_s
         self._p_s = p_s
-        self._q_s = np.zeros(self._n_a, dtype=float)
-        self._w_s = np.zeros(self._n_a, dtype=float)
-        self._n_s = np.zeros(self._n_a, dtype=int)
-        self._children = np.full(self._n_a, fill_value=None, dtype=Node)
+        self._q_s = np.zeros(p_s.shape, dtype=float)
+        self._w_s = np.zeros(p_s.shape, dtype=float)
+        self._n_s = np.zeros(p_s.shape, dtype=int)
+        self._children = np.full(p_s.shape, fill_value=None, dtype=Node)
         self._is_terminal = is_terminal
  
  
     @classmethod
     def configure(cls, model: tf.keras.Model, simulator: Simulator, 
-                  n_a: int, type: int) -> None:
-        """Configures Node with the given `model`, `simulator`, 
-        `n_a`, and `type`.
+                  type: int) -> None:
+        """Configures Node with the given `model`, `simulator`, and `type`.
 
         Args:
             model (tf.keras.Model): Neural network model.
             simulator (Simulator): Simulator. 
-            n_a (int): Number of actions.
             type (int): Type of Node.
         """
         
         cls._model = model
         cls._simulator = simulator
-        cls._n_a = n_a
         cls._type = type
     
     
-    def mcts(self, n_sim: int=800, temp: float=1.0) -> np.ndarray:
-        """Applies `n_sim` number of simulations of monte-carlo tree search 
+    def mcts(self, n_sim: int, temp: float=1.0) -> np.ndarray:
+        """Conducts `n_sim` number of simulations of monte-carlo tree search 
         to this instance and calculates policy with the accumulated statistics.
 
         Simulates with `_expand_and_backup()` n_sim times 
         and calculates policy with `_calc_policy()`.
         
         Args: 
-            n_sim (int, optional): Number of simulations to get policy 
-                at state of this instance. It is setted to 800 by default.
+            n_sim (int): The number of simulations conducted to get policy
+                at state of this instance. 
             temp (float, optional): Temperature variable for calculating policy. 
-                It should be in range of (0, 1]. 
+                It should be in range of `(0, 1]`. 
                 The larger temp gets, it flattens distribution of the policy 
                 and leads more exploration.
                 The smaller temp gets, it leads more exploitation.
-                It is setted to 1.0 by default.
+                It is setted to `1.0` by default.
         
         Returns:
             np.ndarray: The policy of this instance.
@@ -157,24 +153,26 @@ class Node():
             return self._v_s
         
         a = self._select()
-        
+        v_exp = None
+            
         if self._children[a] == None:
             s_exp = self._simulator.simulate(self._s, a)
+            p_exp = None
+            is_terminal = None
             
             if s_exp is None:
-                s_exp = self._s.copy()
-                s_exp[1].fill(-self._s[1][0][0])
                 v_exp = 1.0
-                self._children[a] = Node(s_exp, v_exp, None, True)
-            elif self._simulator.is_terminal(s_exp, a):
+                is_terminal = True
+            elif self._simulator.is_terminal(s_exp):
                 v_exp = -1.0
-                self._children[a] = Node(s_exp, v_exp, None, True)
+                is_terminal = True
             else:     
-                p_exp, v_exp = self._model(s_exp[np.newaxis, :].astype(np.float64), 
-                                           False)
+                p_exp, v_exp = self._model(s_exp[np.newaxis, :], False)
                 p_exp = p_exp.numpy().reshape(-1)
-                v_exp = v_exp.numpy().astype(int).reshape(-1)
-                self._children[a] = Node(s_exp, v_exp, p_exp, False)
+                v_exp = v_exp.numpy().item()
+                is_terminal = False
+            
+            self._children[a] = Node(s_exp, v_exp, p_exp, is_terminal)
         else: 
             v_exp = self._children[a]._expand_and_backup()        
         
@@ -203,11 +201,30 @@ class Node():
         n_pow = self._n_s ** (1 / temp) 
 
         return n_pow / n_pow.sum(axis=0)
-                
+    
+    
+    @classmethod           
+    def get_model(cls) -> tf.keras.Model:
+        return cls._model
+    
+    
+    @classmethod
+    def get_simulator(cls) -> Simulator:
+        return cls._simulator
+    
+    
+    @classmethod
+    def get_type(cls) -> int:
+        return cls._type
+         
          
     def get_s(self) -> np.ndarray:
         return self._s     
-           
+    
+    
+    def get_v_s(self) -> float:
+        return self._v_s
+          
            
     def get_child(self, i: int) -> 'Node': 
         """Gets `i + 1`th child of this instance. 
