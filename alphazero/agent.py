@@ -1,10 +1,9 @@
 import numpy as np
 import tensorflow as tf
-
-from .environment import Environment
-from .node import Node
-from .replaymemory import ReplayMemory
-from .simulator import Simulator
+from environment import Environment
+from node import Node
+from replaymemory import ReplayMemory
+from simulator import Simulator
 
 class Agent():
     """Alphazero agent that trains and applies to the task.
@@ -12,93 +11,119 @@ class Agent():
     Args: 
         model (tf.keras.Model): Neural network model.
         simulator (Simulator): Simulator.
-        n_a (int): The number of actions.
+        type(int): Type of agent. `0` indicates using single agented mcts 
+            and `1` indicates using multi agented mcts.
     """
     
-    #instance variables
-    _model: tf.keras.Model
-    _simulator: Simulator
-    _n_a: int
-    
-    def __init__(self, model: tf.keras.Model, simulator: Simulator, 
-                 n_a: int, type: int):
-        self._model = model
-        self._simulator = simulator
-        self._n_a = n_a
-        
-        Node.configure(model, simulator, n_a, 1)
+    def __init__(self, model: tf.keras.Model, simulator: Simulator, type: int):
+        Node.configure(model, simulator, type)
 
     
-    def train(self, steps: int=700000, n_ep_train: int=10000, 
-              batch_size: int=4096, n_train_save: int=1000, 
-              n_replay_ep: int=50000) -> None:
-        """Trains neural network of this instance per `n_ep_train` episodes 
-        for `steps` steps.
+    def train(self, steps: int=700000, epochs: int=1,
+              alpha: float=1.0, epsilon: float=0.25,
+              episodes: int=100, replay_episodes: int=50000,
+              simulations: int=800, 
+              total_batch_size: int=4096, mini_batch_size: int=32, 
+              save_steps: int=1000, save_path: str='bin/alphazero.tf') -> None:
+        """Trains model of agent `epochs` epochs for `steps` steps. 
+        The agent self-plays `episodes` episodes using mcts and trains 
+        using generated episode data.
         
-        `n_replay_ep` numbers of episodes are saved in replay memory. 
-    
+        Probabilities of root node is calculated as 
+        `(1 - epsilon) * p_a + epsilon * eta_a`, where:
+        * `p_a` are prior probabilities of the root node.
+        * `eta_a` are dirichlet noise to the root node.
+        
         Args: 
             steps (int, optional): The number of steps to train. 
-                Setted to 700000 by default.
-            n_ep_train (int, opitional): The number of episode played 
-                per training.
-            batch_size(int, optional): Batch size of data 
-                per one training step. Setted to 4096 by default.
-            n_train_save(int, optional): The number of training per save.
-                Setted to 1000 by default. 
-            n_replay_ep (int, optional): The number of episodes to be saved 
-                in replay memory. Setted to 50000 by default.
+                Setted to `700000` by default.
+            epochs (int, optional): The number of epochs to train in one step.
+                Setted to `1` by default.
+            alpha (float, optional): Dirichlet noise parameter. 
+                If alpha is smaller than `1.0`, the distribution vectors 
+                become near the basis vector. If alpha is `1.0`, 
+                the distribution vectors are uniform. 
+                If alpha is bigger than `1.0`, the distribution vectors
+                become more-balanced. Alpha is preferred to be 
+                an inverse proportion to the approximate number of 
+                legal actions. Setted to `1.0` by default.
+            epsilon (float, optional): Weight of dirichlet noise. 
+                Setted to `0.25` by default.  
+            episodes (int, opitional): The number of episodes 
+                that the agent progresses before training in one step. 
+                Setted to `100` by default.
+            replay_episodes (int, optional): The number of episodes to be saved 
+                in replay memory. Setted to `50000` by default.
+            simulations (int, optional): The number of mcts simulations 
+                conducted. Setted to `800` by default.
+            total_batch_size (int, optional): Total batch size of data 
+                for training. Setted to `4096` by default.
+            mini_batch_size (int, optional): Mini batch size of data 
+                for training. Setted to `32` by default.
+            save_steps (int, optional): The number of steps 
+                for saving the model. Setted to `1000` by default. 
+            save_path (str, optional): File path for saving model. 
+                Setted to `bin/alphazero.tf` by default.
         """
         
-        replay_mem = ReplayMemory(n_replay_ep)
-        
-        for i in range(1, steps  * n_ep_train + 1):
-            ep_mem = []
-            z = None
-            
-            root_s = self._simulator.gen_init_s()
-            root_p, root_v = self._model(
-                    root_s[np.newaxis, :].astype(np.float64), False)
-            root_p = root_p.numpy().reshape(-1)
-            root_v = root_v.numpy().astype(int).reshape(-1)
-            root = Node(root_s, root_v, root_p, False) 
-            
-            while 1:
-                pi = root.mcts()
-                
-                ep_mem.append([i, root.get_s(), pi])
-                
-                root = root.get_child(np.random.choice(self._n_a, p=pi))
+        model = Node.get_model()
+        simulator = Node.get_simulator()
+        replay_mem = ReplayMemory(replay_episodes)
+        rng = np.random.default_rng()
+        type = Node.get_type()
 
-                z = root.get_is_terminal()
+        for i in range(1, steps + 1):
+            for j in range((i - 1) * episodes + 1, i * episodes + 1):
+                episode_buffer = []
                 
-                if z:             
-                    break
-    
-            if root.get_s()[1][0][0] == 1:
-                z = -z     
-            
-            for data in ep_mem:
-                data.append(z)
-                z = -z
-            
-            replay_mem.extend(ep_mem)
-            
-            if i % n_ep_train == 0:
-                x, y = replay_mem.sample(batch_size)
+                s = simulator.gen_init_s()
                 
-                self._model.fit(x, y, batch_size=batch_size)       
+                p, v = model(s[np.newaxis, :], False)
                 
-            if i % n_train_save * n_ep_train == 0:
-                self._model.save('bin/alphasix-{i}.tf')    
+                p = p.numpy().reshape(-1)
+                p = ((1 - epsilon) * p 
+                     + epsilon * rng.dirichlet([alpha for _ in range(p.shape[0])]))
+                
+                v = v.numpy().item()
+                
+                root = Node(s, v, p, False)
 
+                while 1:
+                    pi = root.mcts(simulations)
+                    
+                    episode_buffer.append([j, root.get_s(), pi])
+                    
+                    root = root.get_child(rng.choice(pi.shape[0], p=pi))
+                    
+                    if root.get_is_terminal():
+                        break
+                
+                z = root.get_v_s()
+                
+                if type == 0:
+                    for data in episode_buffer:
+                        data.append(z)
+                else:
+                    if len(episode_buffer) % 2 != 0:
+                        z = -z
+                    
+                    for data in episode_buffer:
+                        data.append(z)
+                        z = -z
+                
+                replay_mem.extend(episode_buffer)
+
+            for _ in range(epochs):
+                x, y = replay_mem.sample(total_batch_size)
+                model.fit(x, y, batch_size=mini_batch_size)
+            
+            if i % save_steps == 0:
+                model.save(save_path)    
+            
                                    
-
     def apply(self, env: Environment, *args, **kwargs) -> None:
         """Applies this instance to the task.
         
         Args: 
             env (Environment): Environment of the task.
         """
-        
-        
