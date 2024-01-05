@@ -1,56 +1,58 @@
 import numpy as np
 
 class Simulator():
-    """Interface that simulates state with selected action.
-    This method is used for training model of agent.
+    """Interface of simulator for mcts and training.
     Class that implements this interface should implement 
     `gen_init_s()`, `simulate()`, and `is_terminal()`.
     """
 
-    @classmethod
-    def gen_init_s(cls) -> np.ndarray:
+    def gen_init_s(self) -> np.ndarray:
         """Generates initial state. 
-
-        Raises: 
-            NotImplementedError: Raises when class that implemented 
-                this interface did not implement this method.
         
         Returns:
             np.ndarray: The initial state.
+            
+        Raises: 
+            NotImplementedError: Raises when class that implemented 
+                this interface did not implement this method.
         """
 
-        raise NotImplementedError('class ' + cls.__name__ 
+        raise NotImplementedError('class ' + self.__class__.__name__ 
                                   + ' did not implement method gen_init_s()')
       
         
-    def simulate(self, s: np.ndarray, a: int) -> np.ndarray:
-        """Simulates current state with selected action 
-        by using given `s` and `a`.
+    def simulate(self, s: np.ndarray, a: int) -> np.ndarray | None:
+        """Simulates current state `s` with selected action `a`.
 
         Args:
-            s (np.ndarray): Current state.
-            a (int): Selected action.
-        
+            s (np.ndarray): The current state.
+            a (int): The selected action.
+                
+        Returns:
+            np.ndarray or None: Next state if `a` is a valid action, 
+                `None` otherwise.
+
         Raises:
             NotImplementedError: Raises when class that implemented
                 this interface did not implement this method.
-        
-        Returns:
-            np.ndarray: Next state.
         """
         
         raise NotImplementedError('class ' + self.__class__.__name__ 
                                   + ' did not implement method simulate()')
         
         
-    def is_terminal(self, s: np.ndarray, a: int) -> bool:
-        """Checks whether state `s` derived by action `a` is terminal or not.
+    def is_terminal(self, s: np.ndarray) -> bool:
+        """Checks whether state `s` is terminal state or not.
 
         Args:
             s (np.ndarray): The state to be checked.
-            a (int): Action that derived `s`
+            
         Returns:
-            bool: `True` if the given state is terminal, `False` otherwise. 
+            bool: `True` if the given state is terminal state, `False` otherwise. 
+            
+        Raises: 
+            NotImplementedError: Raises when class that implemented 
+                this interface did not implement this method.
         """
         
         raise NotImplementedError('class ' + self.__class__.__name__ 
