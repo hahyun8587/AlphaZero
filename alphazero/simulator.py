@@ -21,16 +21,16 @@ class Simulator():
                                   + ' did not implement method gen_init_s()')
       
         
-    def simulate(self, s: np.ndarray, a: int) -> np.ndarray | None:
-        """Simulates current state `s` with selected action `a`.
+    def simulate(self, s: np.ndarray, a: int) -> tuple:
+        """Simulates taking action `a` on state `s`.
 
         Args:
-            s (np.ndarray): The current state.
-            a (int): The selected action.
+            s (np.ndarray): The state to be applied the action.
+            a (int): The action to be taken.
                 
         Returns:
-            np.ndarray or None: Next state if `a` is a valid action, 
-                `None` otherwise.
+            tuple: Tuple is consist of next state and immediate reward. 
+                The next state is `None` if `a` is not a valid action.
 
         Raises:
             NotImplementedError: Raises when class that implemented
