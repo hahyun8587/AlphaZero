@@ -15,6 +15,9 @@ class AlphaZeroModel(tf.keras.Model):
     have L2 regularizer. The final loss of the model is its 
     `compiled loss + L2 regularization loss`. 
     
+    `inputs` should have single batch when this instance is called with 
+    `training` as `False`.
+    
     Args:
         n_res (int, optional): Number of residual blocks to be made. 
             Setted to 39 by default.
@@ -50,21 +53,33 @@ class AlphaZeroModel(tf.keras.Model):
         self._v_head = ValueHead(v_head_out_dim)
 
 
-    def call(self, inputs, training: bool) -> list:
+    def call(self, inputs, training: bool) -> tuple:
         conv_block_out = self._conv_block(inputs, training)
         res_block_out = self._res_blocks[0](conv_block_out, training)
         
         for i in range(1, len(self._res_blocks)):
             res_block_out = self._res_blocks[i](res_block_out)
         
-        p = self._p_head(res_block_out, training)
-        v = self._v_head(res_block_out, training)
+        p_head_out = self._p_head(res_block_out, training)
+        v_head_out = self._v_head(res_block_out, training)
+            
+        return (p_head_out, v_head_out) if training \
+                else (p_head_out.numpy().squeeze(axis=0), 
+                      v_head_out.numpy().item())
         
-        return [p, v]
-        
+    
+    def get_compile_config(self) -> dict:
+        return {'optimizer': tf.keras.optimizers.SGD(
+                    learning_rate=AlphaZeroSchedule(decay_steps=10),
+                    momentum=0.9), 
+                'loss': [tf.keras.losses.CategoricalCrossentropy(), 
+                         tf.keras.losses.MeanSquaredError()]}
+
+   
    
 class ConvBlock(tf.keras.layers.Layer):
     """Convolutional block that composes alphazero model.
+    
     Convolutional block that composes first layer of alphazero model 
     has convolution of 256 filters of kernel size 3 x 3 with stride 1 
     and no residual feature.
@@ -126,6 +141,7 @@ class ConvBlock(tf.keras.layers.Layer):
         return out
     
     
+    
 class ResBlock(tf.keras.layers.Layer):
     """Residual block that composes alphazero model.
     
@@ -157,11 +173,12 @@ class ResBlock(tf.keras.layers.Layer):
         return conv_block2_out
     
     
+    
 class PolicyHead(tf.keras.layers.Layer):
     """Policy head that composes alphazero model.
     
     The policiy head consists as following:
-    * A convolutional block that has 2 filters of kernel size 1 x 1
+    * A convolutional block that has 2 filters of kernel size 1 x 1 
       with stride 1 and no residual connection 
     * A fully connected linear layer that outputs a vector
     
@@ -190,13 +207,14 @@ class PolicyHead(tf.keras.layers.Layer):
         return fc_out
     
     
+    
 class ValueHead(tf.keras.layers.Layer):
     """Vlaue head that composes alphazero model.
     
     The value head consists as following:
     * A convolution block that has 1 filter of kernel size 1 x 1 
       with stride 1 and no residual connection.
-    * A fully connected linear layer to a hidden layer of size 256
+    * A fully connected linear layer to a hidden layer of size 256 
     * A recitifier nonlinearity
     * A fully connected linear layer to vector
     * A tanh nonlinearity outputting vector in the range [-1, 1]
@@ -231,21 +249,44 @@ class ValueHead(tf.keras.layers.Layer):
         return fc2_out       
 
 
-class AlphaZeroLoss(tf.keras.losses.Loss):
-    """Loss of alphazero model.
+
+class AlphaZeroSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+    """Learning rate schedule of alphazero.
+
+    The learning rate starts from `initial_learning_rate` and dropped by 
+    `decay_rate` when accumulated training step reaches multiple of 
+    `decay_step`.    
     
-    The equation of loss function is \\
-    `l = pow(z - v, 2) - transpose(pi) * log(p)`
-    
-    L2 regularization is applied since all the layers of `AlphaZeroModel` 
-    have L2 regularizer.
+    Args:
+        initial_learning_rate (float): Initial learning rate.
+            Setted to `0.2` by default. 
+        decay_steps (int): The number of steps to be accumulated for 
+            learning rate decay. Setted to `17500` by default.
+        decay_rate (float): Rate that learning rate to be decayed.
+            Setted to `0.1` by default.
     """
     
-    def call(self, y_true: list, y_pred: list) -> tf.Tensor:
-        se = (y_true[1] - y_pred[1]) ** 2
-        cee = tf.reshape(
-                tf.keras.losses.categorical_crossentropy(y_true[0], y_pred[0]), 
-                [y_true[0].shape[0], 1])
+    #instance variables
+    _initial_learning_rate: float
+    _decay_steps: int
+    _decay_rate: float
+    _step: int
     
-        return se - cee
-    
+    def __init__(self, initial_learning_rate: float = 0.2, 
+                 decay_steps: int = 17500, decay_rate: float = 0.1):
+        self._initial_learning_rate = initial_learning_rate
+        self._decay_steps = decay_steps
+        self._decay_rate = decay_rate
+        self._step = 0
+       
+        
+    def __call__(self, step: tf.Tensor) -> float:    
+        learning_rate = self._initial_learning_rate \
+                * self._decay_rate ** (self._step // self._decay_steps)
+
+        self._step += 1
+        
+        return learning_rate
+
+
+print(tf.keras.losses.MeanSquaredError()([[1, 1], [1, 1]], [[3, 5], [5, 5]]))
