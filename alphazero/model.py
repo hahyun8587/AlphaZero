@@ -68,9 +68,10 @@ class AlphaZeroModel(tf.keras.Model):
                       v_head_out.numpy().item())
         
     
-    def get_compile_config(self) -> dict:
+    def get_compile_config(self, steps: int, epochs: int) -> dict:
         return {'optimizer': tf.keras.optimizers.SGD(
-                    learning_rate=AlphaZeroSchedule(decay_steps=10),
+                    learning_rate=AlphaZeroSchedule(
+                            decay_steps=steps * epochs * 2),
                     momentum=0.9), 
                 'loss': [tf.keras.losses.CategoricalCrossentropy(), 
                          tf.keras.losses.MeanSquaredError()]}
@@ -287,6 +288,6 @@ class AlphaZeroSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         self._step += 1
         
         return learning_rate
-
-
-print(tf.keras.losses.MeanSquaredError()([[1, 1], [1, 1]], [[3, 5], [5, 5]]))
+    
+    
+    
