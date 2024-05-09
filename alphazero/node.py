@@ -10,7 +10,7 @@ class Node():
     by using `Node.configure()` before the any instantiation.
     
     Statistics of `Node` instance are set to `None` \\
-    if `True` is given to `is_terminal`, all zeros otherwise.
+    if `is_terminal` is `True`, all zeros otherwise.
     
     Args:
         s (np.ndarray): State of this instance.
@@ -23,8 +23,8 @@ class Node():
     #class variables
     _model: tf.keras.Model
     _simulator: Simulator
-    _type: int 
     _gamma: float
+    _type: int 
     
     #instance variables
     _s: np.ndarray
@@ -57,7 +57,7 @@ class Node():
     
     @classmethod
     def configure(cls, model: tf.keras.Model, simulator: Simulator, 
-                  type: int, gamma: float=1.0) -> None:
+                  type: int, gamma: float = 1.0) -> None:
         """Configures policy-value network, simulator, type, 
         and discount factor of `Node`. 
         
@@ -67,9 +67,9 @@ class Node():
             type (int): The type of `Node`. 
                 `0` indicates single-agented and `1` indicates double-agented.
             gamma (float, optional): The discount factor. 
-                It should be in range of `[0, 1]`. Gamma of `0` indicates \\ 
-                considering immediate reward only while `1` indicates considering \\ 
-                immediate reward and all the future rewards equally. Setted to \\
+                It should be in range of `[0, 1]`. Gamma of `0` indicates 
+                considering immediate reward only while `1` indicates considering  
+                immediate reward and all the future rewards equally. Setted to 
                 `1.0` by default.
         """
         
@@ -79,19 +79,19 @@ class Node():
         cls._gamma = gamma
     
     
-    def mcts(self, n_sim: int, tau: float=1.0) -> np.ndarray:
-        """Conducts `n_sim` number of simulations of monte-carlo tree search \\
+    def mcts(self, n_sim: int, tau: float = 1.0) -> np.ndarray:
+        """Conducts `n_sim` number of simulations of monte-carlo tree search 
         to this instance and calculates policy with the accumulated statistics.
 
-        The algorithm simulates with `_search()` `n_sim` times \\
+        The algorithm simulates with `_search()` `n_sim` times 
         and calculates policy with `_calc_policy()`.
         
         Args: 
             n_sim (int): The number of simulations conducted.
             tau (float, optional): Temperature variable for calculating policy. 
-                It should be in range of `(0, 1]`. The larger `tau` gets, \\
-                it flattens distribution of the policy \\
-                and leads more exploration. The smaller `tau` gets, \\ 
+                It should be in range of `(0, 1]`. The larger `tau` gets, 
+                it flattens distribution of the policy 
+                and leads more exploration. The smaller `tau` gets,  
                 it leads more exploitation. It is setted to `1.0` by default.
         
         Returns:
@@ -104,19 +104,19 @@ class Node():
         return self._calc_policy(tau)
         
         
-    def _select(self, c_puct: float=4.0) -> int:
-        """Selects action at the state of this instance accroding to \\
+    def _select(self, c_puct: float = 4.0) -> int:
+        """Selects action at the state of this instance accroding to 
         puct algorithm.
         
-        The equation of puct algorithm is \\
+        The equation of puct algorithm is 
         `a = argmax_a(Q(s, a) + U(s, a))`, where:
         * `U(s, a) = c_puct * P(s, a) * 
         sqrt(sum_b(N(s, b))) / (1 + N(s, a))`
         
         Args:
             c_puct (float, optional): The puct constant. 
-                Bigger c_puct value makes exploration to be more considered and \\ 
-                smaller c_puct value makes exploitation to be more considered. \\
+                Bigger c_puct value makes exploration to be more considered and 
+                smaller c_puct value makes exploitation to be more considered. 
                 Approximately value of 4 is optimal. 
                 https://medium.com/oracledevs/lessons-from-alphazero-part-3-parameter-tweaking-4dceb78ed1e5
         
@@ -129,12 +129,12 @@ class Node():
        
     
     def _expand_and_evaluate(self, a: int) -> float:
-        """Expands new leaf node to this instance and evaluates \\ 
+        """Expands new leaf node to this instance and evaluates 
         prior probabilities and state value of new state.
 
-        The new state is obtained by taking aciton `a` \\
-        on the state of this instance. Immediate reward is stored \\
-        in r_sa of this instance. New node is expanded to `a`th child of \\
+        The new state is obtained by taking aciton `a` 
+        on the state of this instance. Immediate reward is stored 
+        in r_sa of this instance. New node is expanded to `a`th child of 
         this instance.
 
         Args:
@@ -150,9 +150,7 @@ class Node():
         if self._is_terminal:
             raise ValueError('Terminal node invoked _expand_and_evaluate().')
         
-        s_prime, r = Node._simulator.simulate(self._s, a)
-        self._r_s[a] = r
-        
+        r, s_prime = Node._simulator.simulate(self._s, a)
         p, v = Node._model(s_prime[np.newaxis, :], False)
         is_terminal = Node._simulator.is_terminal(s_prime)
         
@@ -161,12 +159,13 @@ class Node():
             v = 0.0
         
         self._children[a] = Node(s_prime, p, is_terminal)
-        
+        self._r_s[a] = r
+         
         return v
         
         
     def _backup(self, v: float, i: int) -> None:
-        """Updates statistics of this instance's `i`th edge \\
+        """Updates statistics of this instance's `i`th edge 
         with value `v`.
         
         Statistics of `i`th edge is updated as following: 
@@ -187,17 +186,17 @@ class Node():
     def _search(self) -> float:
         """Searchs future states along the tree whose this instance is root. 
         
-        The algorithm selects action with `_select()` until it reachs leaf node. \\
-        Then it expands leaf node with new node and evaluates \\ 
-        value of the new node by `_expand_and_evaluate()`. Finally it backups \\
-        statistics of the node it visited with `_backup()` from the leaf node \\
+        The algorithm selects action with `_select()` until it reachs 
+        leaf node. Then it expands leaf node with new node and evaluates 
+        value of the new node by `_expand_and_evaluate()`. Finally it backups 
+        statistics of the node it visited with `_backup()` from the leaf node 
         to the root node.
         
-        The action value passed to `_backup()` is calculated as following: \\
-        `r_sa + gamma * v` if `Node` is single-agented \\
+        The action value passed to `_backup()` is calculated as following: 
+        `r_sa + gamma * v` if `Node` is single-agented 
         `r_sa + gamma * (-v)` if `Node` is double-agented, where 
         
-        * `r_sa` is immediate reward obtained when action `a` is taken \\
+        * `r_sa` is immediate reward obtained when action `a` is taken 
         on state `s`. 
         * `gamma` is discount factor.
         * `v` is the action value of child node in its perspective.
@@ -230,7 +229,7 @@ class Node():
     def _calc_policy(self, temp: float) -> np.ndarray:
         """Calculates policy of this instance with the given `temp`.
     
-        The equation of the policy is \\
+        The equation of the policy is 
         `pi = pow(N(s, .), 1 / tau) / sum_b(pow(N(s, b), 1 / tau))`, where:
         * `tau` indicates the temperature variable. 
 
@@ -257,27 +256,46 @@ class Node():
     
     
     @classmethod
+    def get_gamma(cls) -> float:
+        return cls._gamma
+    
+    
+    @classmethod
     def get_type(cls) -> int:
         return cls._type
          
          
     def get_s(self) -> np.ndarray:
         return self._s     
-              
-           
-    def get_child(self, i: int) -> 'Node': 
-        """Gets `i + 1`th child of this instance. 
+    
+    
+    def get_reward(self, a: int) -> float:
+        """Gets immediate reward of taking action `a` on this instance's state.
 
         Args:
-            i (int): Index of child to be obtained.
-        
+            a (int): The action taken.
+
         Returns:
-            Node: The `i + 1`th child.
+            float: The immediate reward.
+        """
+        
+        return self._r_s[a]     
+        
+                     
+    def get_child(self, a: int) -> 'Node': 
+        """Gets child `Node` instance that represents the state that obtained 
+        by taking action `a` on this instance's state. 
+
+        Args:
+            a (int): The action taken.
+             
+        Returns:
+            Node: The child `Node` instance.
         """     
         
-        return self._children[i]
+        return self._children[a]
+    
 
-
-    def get_is_terminal(self) -> int:
+    def get_is_terminal(self) -> bool:
         return self._is_terminal
 
