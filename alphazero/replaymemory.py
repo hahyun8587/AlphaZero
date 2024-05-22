@@ -70,7 +70,7 @@ class ReplayMemory(deque):
         y_pi = []
         y_z = []
         
-        for i in self._rng.choice(len(self), size=n, replace=False):
+        for i in self._rng.choice(len(self), size=n):
             x.append(self[i][1])
             y_pi.append(self[i][2])
             y_z.append([self[i][3]])
