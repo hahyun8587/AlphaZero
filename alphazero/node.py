@@ -23,6 +23,7 @@ class Node():
     #class variables
     _model: tf.keras.Model
     _simulator: Simulator
+    _n_action: int
     _gamma: float
     _type: int 
     
@@ -46,24 +47,26 @@ class Node():
             self._n_s = None
             self._r_s = None
         else:      
-            self._q_s = np.zeros(p_s.shape, dtype=float)
-            self._w_s = np.zeros(p_s.shape, dtype=float)
-            self._n_s = np.zeros(p_s.shape, dtype=int)
-            self._r_s = np.zeros(p_s.shape, dtype=float)
+            self._q_s = np.zeros(Node._n_action, dtype=float)
+            self._w_s = np.zeros(Node._n_action, dtype=float)
+            self._n_s = np.zeros(Node._n_action, dtype=int)
+            self._r_s = np.zeros(Node._n_action, dtype=float)
+
         
-        self._children = np.full(p_s.shape, fill_value=None, dtype=Node)
+        self._children = np.full(Node._n_action, fill_value=None, dtype=Node)
         self._is_terminal = is_terminal
  
     
     @classmethod
     def configure(cls, model: tf.keras.Model, simulator: Simulator, 
-                  type: int, gamma: float = 1.0) -> None:
+                  n_action: int, type: int, gamma: float = 1.0) -> None:
         """Configures policy-value network, simulator, type, 
         and discount factor of `Node`. 
         
         Args:
             model (tf.keras.Model): The neural network model.
             simulator (Simulator): The simulator. 
+            n_action (int): The number of action.
             type (int): The type of `Node`. 
                 `0` indicates single-agented and `1` indicates double-agented.
             gamma (float, optional): The discount factor. 
@@ -75,8 +78,9 @@ class Node():
         
         cls._model = model
         cls._simulator = simulator
-        cls._type = type
+        cls._n_action = n_action
         cls._gamma = gamma
+        cls._type = type
     
     
     def mcts(self, n_sim: int, tau: float = 1.0) -> np.ndarray:
@@ -149,19 +153,20 @@ class Node():
         
         if self._is_terminal:
             raise ValueError('Terminal node invoked _expand_and_evaluate().')
-        
+
         r, s_prime = Node._simulator.simulate(self._s, a)
-        p, v = Node._model(s_prime[np.newaxis, :], False)
-        is_terminal = Node._simulator.is_terminal(s_prime)
-        
-        if is_terminal:
-            p = None
-            v = 0.0
-        
-        self._children[a] = Node(s_prime, p, is_terminal)
         self._r_s[a] = r
-         
-        return v
+
+        if s_prime is None:
+            self._children[a] = Node(None, None, True)
+
+            return 0;
+        else:
+            p, v = Node._model(s_prime[np.newaxis, :], False)
+            self._children[a] = Node(s_prime, p, 
+                                     Node._simulator.is_terminal(s_prime))
+        
+            return v
         
         
     def _backup(self, v: float, i: int) -> None:
