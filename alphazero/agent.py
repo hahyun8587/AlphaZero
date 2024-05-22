@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import tensorflow as tf
 from environment import Environment
@@ -11,12 +12,14 @@ class Agent():
     Args: 
         model (tf.keras.Model): Neural network model.
         simulator (Simulator): Simulator.
+        n_action (int): The number of action that this agent can act.
         type(int): Type of agent. `0` indicates using single agented mcts 
             and `1` indicates using multi agented mcts.
     """
     
-    def __init__(self, model: tf.keras.Model, simulator: Simulator, type: int):
-        Node.configure(model, simulator, type)
+    def __init__(self, model: tf.keras.Model, simulator: Simulator, 
+                 n_action: int, type: int):
+        Node.configure(model, simulator, n_action, type)
 
     
     def train(self, steps: int = 700000, episodes: int = 100, 
@@ -66,6 +69,9 @@ class Agent():
                 Setted to `bin/alphazero.tf` by default.
         """
         
+        logging.basicConfig(level=logging.DEBUG,
+                            format="%(asctime)s %(levelname)s %(pathname)s:"
+                                   "%(lineno)d] %(message)s") 
         model = Node.get_model()
         simulator = Node.get_simulator()
         replay_mem = ReplayMemory(replay_buffer_size)
@@ -74,25 +80,36 @@ class Agent():
         type = Node.get_type()
 
         for i in range(1, steps + 1):
+            logging.log(logging.INFO, "Train step %d", i)
+
             for j in range((i - 1) * episodes + 1, i * episodes + 1):
+                logging.log(logging.INFO, "Generating episode %d", j) 
+
                 episode_buffer = []
                 episode_rewards = []
                 
                 s = simulator.gen_init_s()
                 p, v = model(s[np.newaxis, :], False)
-                p = ((1 - epsilon) * p 
-                     + epsilon * rng.dirichlet([alpha for _ in range(p.shape[0])]))
+                p = ((1 - epsilon) * p + epsilon * rng.dirichlet(
+                        [alpha for _ in range(p.shape[0])]))
                 
                 root = Node(s, p, False)
+                
+                k = 1
 
                 while 1:
                     pi = root.mcts(simulations)
                     a = rng.choice(pi.shape[0], p=pi)
-                    
+
+                    logging.log(logging.INFO, 
+                                "Move %d of episode %d: %d", k, j, a) 
+
                     episode_buffer.append([j, root.get_s(), pi])
                     episode_rewards.append(root.get_reward(a))
                     
                     root = root.get_child(a)
+                    
+                    k += 1
                     
                     if root.get_is_terminal():
                         break
@@ -108,10 +125,13 @@ class Agent():
         
                 replay_mem.extend(episode_buffer)
 
+            logging.log(logging.INFO, "Training with samples at step %d", i)
+            
             x, y = replay_mem.sample(examples)
             model.fit(x, y, epochs=epochs, batch_size=mini_batch_size)
             
             if i % save_steps == 0:
+                logging.log(logging.INFO, "Saving model at step %d...", i)
                 model.save(save_path)    
             
                                    
